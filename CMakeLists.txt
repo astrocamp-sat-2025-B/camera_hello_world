@@ -47,20 +47,19 @@ pico_generate_pio_header(camera_hello_world ${CMAKE_CURRENT_LIST_DIR}/blink.pio)
 pico_enable_stdio_uart(camera_hello_world 0)
 pico_enable_stdio_usb(camera_hello_world 1)
 
-# Add the standard library to the build
+# Link standard and required hardware libraries
 target_link_libraries(camera_hello_world
-        pico_stdlib)
+        pico_stdlib
+        hardware_pwm
+        hardware_i2c
+        hardware_pio
+        hardware_clocks)
 
 # Add the standard include files to the build
 target_include_directories(camera_hello_world PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
 )
 
-# Add any user requested libraries
-target_link_libraries(camera_hello_world 
-        hardware_i2c
-        hardware_pio
-        )
+# (additional target_link_libraries not needed below; consolidated above)
 
 pico_add_extra_outputs(camera_hello_world)
-
