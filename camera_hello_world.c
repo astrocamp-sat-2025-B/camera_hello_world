@@ -38,12 +38,13 @@ void camera_xclk_init() {
     // GPIO28をPWM機能に設定
     gpio_set_function(XCLK_PIN, GPIO_FUNC_PWM);
     uint slice_num = pwm_gpio_to_slice_num(XCLK_PIN);
+    uint chan = pwm_gpio_to_channel(XCLK_PIN);
 
     pwm_set_clkdiv(slice_num, 1.0f); // クロック分周を1に設定（125MHz）
     pwm_set_wrap(slice_num, 9);     // 10カウントで1周期（12.5MHz）
 
     // デューティ比を50%に設定
-    pwm_set_chan_level(slice_num, PWM_CHAN_A, 5);
+    pwm_set_chan_level(slice_num, chan, 5);
 
     pwm_set_enabled(slice_num, true);
 }
