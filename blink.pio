@@ -20,6 +20,12 @@ lp2:
     jmp x-- lp2   ; Delay for the same number of cycles again
 .wrap             ; Blink forever!
 
+; .program dvp_capture
+;     set x, 0x30    ; テスト用のデータ(0x42)をXレジスタにロード
+; .wrap_target
+;     mov isr, x      ; Xレジスタの値を入力シフトレジスタ(ISR)にコピー
+;     push noblock    ; ISRの内容(8ビット)をRX FIFOにプッシュする
+; .wrap               ; これを永遠に繰り返す
 
 % c-sdk {
 // this is a raw helper function for use by the user which sets up the GPIO output, and configures the SM to output on a particular pin
@@ -31,4 +37,12 @@ void blink_program_init(PIO pio, uint sm, uint offset, uint pin) {
    sm_config_set_set_pins(&c, pin, 1);
    pio_sm_init(pio, sm, offset, &c);
 }
+
+// PIOステートマシンを初期化するためのヘルパー関数
+; static inline void fifo_test_program_init(PIO pio, uint sm, uint offset) {
+;     pio_sm_config c = fifo_test_program_get_default_config(offset);
+;     // このプログラムはGPIOピンを使わないので、ピン関連の設定は不要
+;     pio_sm_init(pio, sm, offset, &c);
+;     pio_sm_set_enabled(pio, sm, true);
+; }
 %}

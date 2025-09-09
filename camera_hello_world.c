@@ -4,6 +4,7 @@
 #include "hardware/pio.h"
 #include "blink.pio.h"
 #include "hardware/pwm.h"
+// #include "camera.pio.h" 
 
 // I2C defines
 // This example will use I2C0 on GPIO8 (SDA) and GPIO9 (SCL) running at 400KHz.
@@ -13,6 +14,16 @@
 #define I2C_SCL_PIN 15
 #define I2C_BAUDRATE (100 * 1000) // 100kHz
 #define XCLK_PIN 28
+
+// カメラ
+#define D0_PIN 0  // D0-D7は連続している必要がある
+#define PCLK_PIN 22
+#define HREF_PIN 26
+#define VSYNC_PIN 27 // 今回は使わないが定義しておく
+
+// PIO
+#define CAPTURE_PIO pio1
+#define CAPTURE_SM 0
 
 // I2C（SCCB）の7ビットスレーブアドレス, 8ビットアドレスでは0x42
 const uint8_t CAMERA_ADDR = 0x42 >> 1;
@@ -67,22 +78,33 @@ bool camera_read_reg(uint8_t reg_addr, uint8_t *data) {
     return true;
 }
 
+// void init_dvp_pio() {
+
+// }
+
 int main()
 {
     stdio_init_all();
     init_i2c();
     camera_xclk_init();
+    // init_dvp_pio();
 
     // PIO Blinking example
-    PIO pio = pio0;
-    uint offset = pio_add_program(pio, &blink_program);
-    printf("Loaded program at %d\n", offset);
-    
-    #ifdef PICO_DEFAULT_LED_PIN
-    blink_pin_forever(pio, 0, offset, PICO_DEFAULT_LED_PIN, 3);
-    #else
-    blink_pin_forever(pio, 0, offset, 6, 3);
-    #endif
+    // PIO pio = pio0;
+    PIO pio;
+    uint sm, offset;
+    // uint offset = pio_add_program(pio, &blink_program); printf("Loaded program at %d\n", offset);
+    if (pio_claim_free_sm_and_add_program(&blink_program, &pio, &sm, &offset)) {
+        printf("PIO %d SM %d offset %d\n", pio == pio0 ? 0 : 1, sm, offset);
+        #ifdef PICO_DEFAULT_LED_PIN
+            blink_pin_forever(pio, 0, offset, PICO_DEFAULT_LED_PIN, 3);
+        #else
+            blink_pin_forever(pio, 0, offset, 6, 3);
+        #endif
+    } else {
+        printf("No PIO SMs available\n");
+        return 1;
+    }
 
     uint8_t pid, ver;
 
@@ -100,6 +122,11 @@ int main()
         } else {
             printf("I2C通信エラー: カメラから応答がありません。\n");
         }
-        sleep_ms(1000);
+        // PIOのRX FIFOが空でなければデータを読み出す
+        if (!pio_sm_is_rx_fifo_empty(CAPTURE_PIO, CAPTURE_SM)) {
+            uint8_t data = (uint8_t)pio_sm_get(CAPTURE_PIO, CAPTURE_SM);
+            printf("受信データ: 0x%02X\n", data);
+        }
+        sleep_ms(100);
     }
 }
