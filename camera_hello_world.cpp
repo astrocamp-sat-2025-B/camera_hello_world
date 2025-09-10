@@ -16,8 +16,8 @@
 #define XCLK_PIN 28
 
 // カメラ
-#define FRAME_WIDTH  64
-#define FRAME_HEIGHT 64
+#define FRAME_WIDTH  320
+#define FRAME_HEIGHT 240
 #define D0_PIN 0
 #define D1_PIN 1
 #define D2_PIN 2
@@ -40,6 +40,10 @@ const uint8_t CAMERA_ADDR = 0x42 >> 1;
 // 製品IDのレジスタアドレス
 const uint8_t REG_PID = 0x0A;
 const uint8_t REG_VER = 0x0B;
+const uint8_t REG_COM7 = 0x12;
+const uint8_t REG_COM15 = 0x40;
+const uint8_t REG_TSLB = 0x3A;
+const uint8_t REG_COM13 = 0x3D;
 const uint8_t EXPECTED_PID = 0x76;
 const uint8_t EXPECTED_VER = 0x73;
 
@@ -105,6 +109,144 @@ void init_camera_pins() {
     gpio_set_dir(VSYNC_PIN, GPIO_IN);
 }
 
+void print_camera_format() {
+    uint8_t com7_val, com15_val;
+    
+    // COM7レジスタの値を読み取る
+    if (!camera_read_reg(REG_COM7, &com7_val)) {
+        printf("COM7レジスタの読み取りに失敗しました。\n");
+        return;
+    }
+    
+    // COM15レジスタの値を読み取る
+    if (!camera_read_reg(REG_COM15, &com15_val)) {
+        printf("COM15レジスタの読み取りに失敗しました。\n");
+        return;
+    }
+
+    printf("--- カメラ出力形式 ---\n");
+    printf("レジスタ値: COM7=0x%02X, COM15=0x%02X\n", com7_val, com15_val);
+
+    // COM7の値から基本フォーマットを判断
+    // YUV, RGB, Bayer RAW, Processed Bayer RAW
+    if ((com7_val & 0b00000101) == 0b00000000) { // Bit2=0, Bit0=0
+        printf("基本形式: YUV\n");
+
+        uint8_t tslb_val, com13_val;
+        if (camera_read_reg(REG_TSLB, &tslb_val) && camera_read_reg(REG_COM13, &com13_val)) {
+            bool tslb_bit3 = (tslb_val >> 3) & 1;
+            bool com13_bit0 = com13_val & 1;
+
+            if (!tslb_bit3 && !com13_bit0) {
+                printf("バイト順: YUYV\n");
+            } else if (!tslb_bit3 && com13_bit0) {
+                printf("バイト順: YVYU\n");
+            } else if (tslb_bit3 && !com13_bit0) {
+                printf("バイト順: UYVY\n");
+            } else { // tslb_bit3 && com13_bit0
+                printf("バイト順: VYUY\n");
+            }
+        } else {
+            printf("YUVの並び順を判定できませんでした。\n");
+        }
+    } else if ((com7_val & 0b00000101) == 0b00000100) { // Bit2=1, Bit0=0
+        printf("基本形式: RGB\n");
+        // RGBの場合、COM15で詳細を判断
+        uint8_t rgb_format = (com15_val >> 4) & 0b11; // Bit5, Bit4
+        if (rgb_format == 0b01) {
+            printf("詳細形式: RGB565\n");
+        } else if (rgb_format == 0b11) {
+            printf("詳細形式: RGB555\n");
+        } else {
+            printf("詳細形式: 通常RGB\n");
+        }
+    } else if ((com7_val & 0b00000101) == 0b00000001) { // Bit2=0, Bit0=1
+        printf("基本形式: Bayer RAW\n");
+    } else { // 0b00000101 (Bit2=1, Bit0=1)
+        printf("基本形式: Processed Bayer RAW\n");
+    }
+
+    // COM7の他のビットも解析
+    if (com7_val & (1 << 3)) { // Bit3
+        printf("解像度: QVGA\n");
+    } else {
+        printf("解像度: VGA (またはSCCBで設定された他の解像度)\n");
+    }
+
+    if (com7_val & (1 << 6)) { // Bit6
+        printf("CCIR656形式: 有効\n");
+    }
+    printf("------------------------\n");
+}
+
+// カメラのレジスタに1バイト書き込む関数
+bool camera_write_reg(uint8_t reg_addr, uint8_t data) {
+    uint8_t buffer[2] = {reg_addr, data};
+    if (i2c_write_blocking(I2C_PORT, CAMERA_ADDR, buffer, 2, false) != 2) {
+        return false; // 書き込み失敗
+    }
+    return true;
+}
+
+// カメラの出力形式をRaw RGB (Bayer RAW) に設定する関数
+void set_camera_format_raw_rgb() {
+    printf("カメラの出力形式を Raw RGB (Bayer RAW) に設定します...\n");
+
+    uint8_t com7_val;
+    // まず現在のCOM7レジスタの値を読み取る
+    if (!camera_read_reg(REG_COM7, &com7_val)) {
+        printf("エラー: COM7の読み取りに失敗しました。\n");
+        return;
+    }
+
+    // COM7レジスタのBit0を1に、Bit2を0に設定する
+    // (他の設定ビットは変更しないようにビット演算を行う)
+    com7_val |= (1 << 0);  // Bit0を1にセット (RAW)
+    com7_val &= ~(1 << 2); // Bit2を0にクリア (RGBではなくRAW)
+
+    // 変更した値をレジスタに書き戻す
+    if (camera_write_reg(REG_COM7, com7_val)) {
+        printf("COM7レジスタを 0x%02X に設定しました。\n", com7_val);
+    } else {
+        printf("エラー: COM7の書き込みに失敗しました。\n");
+    }
+}
+
+// カメラの出力形式をYUV (YUYV) に設定する関数
+void set_camera_format_yuv_yuyv() {
+    uint8_t com7_val, tslb_val, com13_val;
+
+    // --- ステップ1: COM7レジスタをYUVモードに設定 ---
+    if (!camera_read_reg(REG_COM7, &com7_val)) {
+        printf("エラー: COM7の読み取りに失敗。\n"); return;
+    }
+    // Bit2とBit0を両方0に設定
+    com7_val &= ~((1 << 2) | (1 << 0));
+    if (!camera_write_reg(REG_COM7, com7_val)) {
+        printf("エラー: COM7の書き込みに失敗。\n"); return;
+    }
+
+    // --- ステップ2: TSLBレジスタで並び順を設定 ---
+    if (!camera_read_reg(REG_TSLB, &tslb_val)) {
+        printf("エラー: TSLBの読み取りに失敗。\n"); return;
+    }
+    // Bit[3]を0に設定 (YUYV or YVYU)
+    tslb_val &= ~(1 << 3);
+    if (!camera_write_reg(REG_TSLB, tslb_val)) {
+        printf("エラー: TSLBの書き込みに失敗。\n"); return;
+    }
+
+    // --- ステップ3: COM13レジスタで並び順を設定 ---
+    if (!camera_read_reg(REG_COM13, &com13_val)) {
+        printf("エラー: COM13の読み取りに失敗。\n"); return;
+    }
+    // Bit[0] (UV swap) を0に設定 (YUYV)
+    com13_val &= ~(1 << 0);
+    if (!camera_write_reg(REG_COM13, com13_val)) {
+        printf("エラー: COM13の書き込みに失敗。\n"); return;
+    }
+}
+
 // PIOではなくGPIOピンからのデータキャプチャを行う関数（未実装）
 void get_photo_frame(int width, int height) {
 
@@ -165,11 +307,14 @@ int main()
 
     if (camera_read_reg(REG_PID, &pid) && camera_read_reg(REG_VER, &ver) &&
             pid == EXPECTED_PID && ver == EXPECTED_VER) {
+        // set_camera_format_raw_rgb();
+        set_camera_format_yuv_yuyv();
         get_photo_frame(FRAME_WIDTH, FRAME_HEIGHT);
     } else {
         printf("I2Cエラー: カメラが見つかりません。\n");
     }
 
+    int i = 0;
     while (true) {
         // if (camera_read_reg(REG_PID, &pid) && camera_read_reg(REG_VER, &ver) &&
         //     pid == EXPECTED_PID && ver == EXPECTED_VER) {
@@ -183,14 +328,16 @@ int main()
             // }
             // printf("\n");
             // 取得したデータを全て表示
-            printf("--- 取得したフレームデータ ---\n");
+            print_camera_format();
+            sleep_ms(10000); // 10秒待機
+            // printf("--- 取得したフレームデータ ---\n");
             for(int y=0; y<FRAME_HEIGHT; y++) {
                 for(int x=0; x<FRAME_WIDTH; x++) {
                     printf("%02X ", frame_buffer[y][x]);
                 }
                 printf("\n");
             }
-            printf("--- フレーム取得完了 --- \n");
+            // printf("--- フレーム取得完了 --- \n\n");
             sleep_ms(5000); // 5秒待機
 
         // } else {
