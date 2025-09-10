@@ -20,24 +20,6 @@ lp2:
     jmp x-- lp2   ; Delay for the same number of cycles again
 .wrap             ; Blink forever!
 
-.program dvp_capture
-.wrap_target
-    set x 29
-    in x, 32
-    push block
-    nop [31]
-.wrap
-
-; .program dvp_capture
-; .wrap_target
-;     set x, 30
-; push_loop:
-;     mov isr, x
-;     push block
-;     nop [30]
-;     jmp x-- push_loop
-; .wrap
-
 % c-sdk {
 // this is a raw helper function for use by the user which sets up the GPIO output, and configures the SM to output on a particular pin
 
@@ -49,10 +31,4 @@ void blink_program_init(PIO pio, uint sm, uint offset, uint pin) {
    pio_sm_init(pio, sm, offset, &c);
 }
 
-// PIOステートマシンを初期化するためのヘルパー関数
-static inline void dvp_capture_program_init(PIO pio, uint sm, uint offset) {
-    pio_sm_config c = dvp_capture_program_get_default_config(offset);
-    // このプログラムはGPIOピンを使わないので、ピン関連の設定は不要
-    pio_sm_init(pio, sm, offset, &c);
-}
 %}
