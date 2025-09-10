@@ -16,10 +16,17 @@
 #define XCLK_PIN 28
 
 // カメラ
-#define D0_PIN 0  // D0-D7は連続している必要がある
+#define D0_PIN 0
+#define D1_PIN 1
+#define D2_PIN 2
+#define D3_PIN 3
+#define D4_PIN 4
+#define D5_PIN 5
+#define D6_PIN 6
+#define D7_PIN 7
 #define PCLK_PIN 22
 #define HREF_PIN 26
-#define VSYNC_PIN 27 // 今回は使わないが定義しておく
+#define VSYNC_PIN 27
 
 // PIO
 #define CAPTURE_PIO pio1
@@ -78,14 +85,33 @@ bool camera_read_reg(uint8_t reg_addr, uint8_t *data) {
     return true;
 }
 
+void init_camera_pins() {
+    // データピン D0-D7 (GPIO 0-7)
+    for (int i = D0_PIN; i <= D7_PIN; i++) {
+        gpio_init(i);
+        gpio_set_dir(i, GPIO_IN);
+    }
+    // 同期ピン PCLK, HREF, VSYNC
+    gpio_init(PCLK_PIN);
+    gpio_set_dir(PCLK_PIN, GPIO_IN);
+
+    gpio_init(HREF_PIN);
+    gpio_set_dir(HREF_PIN, GPIO_IN);
+    
+    gpio_init(VSYNC_PIN);
+    gpio_set_dir(VSYNC_PIN, GPIO_IN);
+}
+
+// PIOではなくGPIOピンからのデータキャプチャを行う関数（未実装）
+void get_photo() {
+}
+
 int main()
 {
     stdio_init_all();
     init_i2c();
     camera_xclk_init();
-
-    PIO pio_dvp;
-    uint sm_dvp, offset_dvp;
+    init_camera_pins();
 
     PIO pio;
     uint sm, offset;
@@ -119,8 +145,7 @@ int main()
             printf("I2C通信エラー: カメラから応答がありません。\n");
         }
 
-        printf("PIO %d SM %d offset %d\n", pio == pio0 ? 0 : 1, sm, offset);
-        printf("DVP PIO %d SM %d offset %d\n", pio_dvp == pio0 ? 0 : 1, sm_dvp, offset_dvp);
+        // get_photo();
         sleep_ms(500);
     }
 }
