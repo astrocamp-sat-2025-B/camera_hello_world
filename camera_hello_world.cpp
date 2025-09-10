@@ -16,6 +16,8 @@
 #define XCLK_PIN 28
 
 // カメラ
+#define FRAME_WIDTH  64
+#define FRAME_HEIGHT 64
 #define D0_PIN 0
 #define D1_PIN 1
 #define D2_PIN 2
@@ -41,6 +43,7 @@ const uint8_t REG_VER = 0x0B;
 const uint8_t EXPECTED_PID = 0x76;
 const uint8_t EXPECTED_VER = 0x73;
 
+uint8_t frame_buffer[FRAME_HEIGHT][FRAME_WIDTH];
 
 void blink_pin_forever(PIO pio, uint sm, uint offset, uint pin, uint freq) {
     blink_program_init(pio, sm, offset, pin);
@@ -103,7 +106,37 @@ void init_camera_pins() {
 }
 
 // PIOではなくGPIOピンからのデータキャプチャを行う関数（未実装）
-void get_photo() {
+void get_photo_frame(int width, int height) {
+
+    // 1. フレーム開始待機 (VSYNCの立ち下がりを待つ)
+    while(gpio_get(VSYNC_PIN)); // VSYNCがLOWになるのを待つ
+    while(!gpio_get(VSYNC_PIN)); // VSYNCがHIGHになるのを待つ
+    while(gpio_get(VSYNC_PIN)); // VSYNCがLOWになるのを待つ -> フレーム開始
+
+    // 2. 指定された行数だけデータを読み取る
+    for (int y = 0; y < height; y++) {
+        // 3. 行の開始待機 (HREFの立ち上がりを待つ)
+        while(!gpio_get(HREF_PIN));
+
+        // 4. 指定されたピクセル数だけデータを読み取る
+        for (int x = 0; x < width; x++) {
+            // 5. ピクセルクロックの立ち上がりを待つ
+            while(!gpio_get(PCLK_PIN));
+
+            // 6. 8ビットのデータを読み取る
+            uint8_t pixel_data = 0;
+            // D7がMSBなので逆順に読み取る
+            for (int i = 7; i >= 0; i--) {
+                pixel_data |= (gpio_get(D0_PIN + i) << i);
+            }
+            frame_buffer[y][x] = pixel_data;
+
+            // 7. ピクセルクロックの立ち下がりを待つ
+            while(gpio_get(PCLK_PIN));
+        }
+        // 8. 行の終了を待つ (HREFの立ち下がり)
+        while(gpio_get(HREF_PIN));
+    }
 }
 
 int main()
@@ -130,22 +163,38 @@ int main()
 
     uint8_t pid, ver;
 
+    if (camera_read_reg(REG_PID, &pid) && camera_read_reg(REG_VER, &ver) &&
+            pid == EXPECTED_PID && ver == EXPECTED_VER) {
+        get_photo_frame(FRAME_WIDTH, FRAME_HEIGHT);
+    } else {
+        printf("I2Cエラー: カメラが見つかりません。\n");
+    }
+
     while (true) {
-        bool success_pid = camera_read_reg(REG_PID, &pid);
-        bool success_ver = camera_read_reg(REG_VER, &ver);
+        // if (camera_read_reg(REG_PID, &pid) && camera_read_reg(REG_VER, &ver) &&
+        //     pid == EXPECTED_PID && ver == EXPECTED_VER) {
 
-        if (success_pid && success_ver) {
-            printf("製品ID (PID): 0x%02X, バージョン (VER): 0x%02X -> ", pid, ver);
-            if (pid == EXPECTED_PID && ver == EXPECTED_VER) {
-                printf("成功: OV7675を正常に検出しました。\n");
-            } else {
-                printf("失敗: 期待するIDと異なります。\n");
+        //     get_photo_frame(FRAME_WIDTH, FRAME_HEIGHT);
+
+            // // 取得したデータの最初の10バイトなどを表示して確認
+            // printf("取得したフレームの左上10ピクセル:");
+            // for(int i=0; i<10; i++) {
+            //     printf(" %02X", frame_buffer[0][i]);
+            // }
+            // printf("\n");
+            // 取得したデータを全て表示
+            printf("--- 取得したフレームデータ ---\n");
+            for(int y=0; y<FRAME_HEIGHT; y++) {
+                for(int x=0; x<FRAME_WIDTH; x++) {
+                    printf("%02X ", frame_buffer[y][x]);
+                }
+                printf("\n");
             }
-        } else {
-            printf("I2C通信エラー: カメラから応答がありません。\n");
-        }
+            printf("--- フレーム取得完了 --- \n");
+            sleep_ms(5000); // 5秒待機
 
-        // get_photo();
-        sleep_ms(500);
+        // } else {
+        //     printf("I2Cエラー: カメラが見つかりません。\n");
+        // }
     }
 }
