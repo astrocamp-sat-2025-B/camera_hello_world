@@ -16,6 +16,7 @@
 #define XCLK_PIN 28
 
 // カメラ
+// #define FRAME_WIDTH  320 * 2
 #define FRAME_WIDTH  320
 #define FRAME_HEIGHT 240
 #define D0_PIN 0
