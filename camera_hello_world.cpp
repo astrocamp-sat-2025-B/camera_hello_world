@@ -78,16 +78,26 @@ bool camera_read_reg(uint8_t reg_addr, uint8_t *data) {
     return true;
 }
 
-// void init_dvp_pio() {
-
-// }
+void init_dvp_pio(PIO *pio_dvp, uint *sm_dvp, uint *offset_dvp) {
+    if (!pio_claim_free_sm_and_add_program(&dvp_capture_program, pio_dvp, sm_dvp, offset_dvp)) {
+        printf("No PIO SMs available for DVP capture\n");
+        return;
+    }
+    printf("DVP Capture PIO %d SM %d offset %d\n", *pio_dvp == pio0 ? 0 : 1, sm_dvp, offset_dvp);
+    dvp_capture_program_init(*pio_dvp, *sm_dvp, *offset_dvp);
+    pio_sm_set_enabled(*pio_dvp, *sm_dvp, true);
+}
 
 int main()
 {
     stdio_init_all();
     init_i2c();
     camera_xclk_init();
-    // init_dvp_pio();
+
+    PIO pio_dvp;
+    uint sm_dvp, offset_dvp;
+
+    init_dvp_pio(&pio_dvp, &sm_dvp, &offset_dvp);
 
     // PIO Blinking example
     // PIO pio = pio0;
@@ -108,6 +118,7 @@ int main()
 
     uint8_t pid, ver;
 
+    // int i = 0;
     while (true) {
         bool success_pid = camera_read_reg(REG_PID, &pid);
         bool success_ver = camera_read_reg(REG_VER, &ver);
@@ -122,11 +133,16 @@ int main()
         } else {
             printf("I2C通信エラー: カメラから応答がありません。\n");
         }
+
+        printf("PIO %d SM %d offset %d\n", pio == pio0 ? 0 : 1, sm, offset);
+        printf("DVP PIO %d SM %d offset %d\n", pio_dvp == pio0 ? 0 : 1, sm_dvp, offset_dvp);
         // PIOのRX FIFOが空でなければデータを読み出す
-        if (!pio_sm_is_rx_fifo_empty(CAPTURE_PIO, CAPTURE_SM)) {
-            uint8_t data = (uint8_t)pio_sm_get(CAPTURE_PIO, CAPTURE_SM);
-            printf("受信データ: 0x%02X\n", data);
-        }
-        sleep_ms(100);
+        // if (!pio_sm_is_rx_fifo_empty(pio_dvp, sm_dvp)) {
+            // i++;
+            uint8_t data = (uint8_t)pio_sm_get(pio_dvp, sm_dvp);
+            printf("受信データ: 0x%d\n", data);
+            // printf("%d回目 受信データ: 0x%d\n", i, data);
+        // }
+        sleep_ms(500);
     }
 }
