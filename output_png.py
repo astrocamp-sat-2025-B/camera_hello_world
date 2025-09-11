@@ -3,14 +3,14 @@ from PIL import Image
 
 # --- 設定項目 ---
 # 16進数データが含まれるファイルのパス
-FILE_PATH = "papercop"
-# FILE_PATH = "screenlog.0"
+# FILE_PATH = "papercop"
+FILE_PATH = "screenlog.0"
 
 # 生成する画像の幅と高さ (QVGAサイズを推奨)
 # WIDTH = 160
 # HEIGHT = 240
-WIDTH = 160
-HEIGHT = 480
+WIDTH = 320
+HEIGHT = 640
 
 # 出力する画像ファイル名
 OUTPUT_PATH = "output_grayscale_image_line_by_line.png"
@@ -37,7 +37,7 @@ def convert_y_line_by_line(file_path, width, height):
                 # 行をスペースで区切り、16進数の文字列リストにする
                 hex_values_in_line = line.split()
 
-                print(f"行 {i+1}: 元のデータ数 {len(hex_values_in_line)}")
+                # print(f"行 {i+1}: 元のデータ数 {len(hex_values_in_line)}")
 
                 # YUYVデータなので、1行には width * 2 個のデータがあるはず
                 # そこからY成分だけを1つおきに抜き出す
@@ -47,7 +47,7 @@ def convert_y_line_by_line(file_path, width, height):
                 # row_pixels = [int(h, 16) for h in y_hex_values]
                 row_pixels = [int(h, 16) for h in hex_values_in_line[:width]]
 
-                print(f"行 {i+1}: Y成分を {len(row_pixels)} 個抽出しました。")
+                # print(f"行 {i+1}: Y成分を {len(row_pixels)} 個抽出しました。")
 
                 # 5. 完成した1行分のピクセルデータを全体のリストに追加
                 image_data_rows.append(row_pixels)

@@ -51,6 +51,8 @@ const uint8_t EXPECTED_VER = 0x73;
 
 uint8_t frame_buffer[FRAME_HEIGHT][FRAME_WIDTH];
 
+void set_camera_format_yuv_yuyv();
+
 void blink_pin_forever(PIO pio, uint sm, uint offset, uint pin, uint freq) {
     blink_program_init(pio, sm, offset, pin);
     pio_sm_set_enabled(pio, sm, true);
@@ -109,6 +111,16 @@ void init_camera_pins() {
     
     gpio_init(VSYNC_PIN);
     gpio_set_dir(VSYNC_PIN, GPIO_IN);
+
+    uint8_t pid, ver;
+    if (camera_read_reg(REG_PID, &pid) && camera_read_reg(REG_VER, &ver) &&
+            pid == EXPECTED_PID && ver == EXPECTED_VER) {
+        // set_camera_format_raw_rgb();
+        set_camera_format_yuv_yuyv();
+        // set_camera_format_rgb565();
+    } else {
+        printf("I2Cエラー: カメラが見つかりません。\n");
+    }
 }
 
 void print_camera_format() {
@@ -305,12 +317,16 @@ void get_photo_frame(int width, int height) {
     }
 }
 
+void init_camera_settings() {
+    camera_xclk_init();
+    init_camera_pins();
+}
+
 int main()
 {
     stdio_init_all();
     init_i2c();
-    camera_xclk_init();
-    init_camera_pins();
+    init_camera_settings();
 
     PIO pio;
     uint sm, offset;
@@ -327,46 +343,20 @@ int main()
         return 1;
     }
 
-    uint8_t pid, ver;
+    get_photo_frame(FRAME_WIDTH, FRAME_HEIGHT);
 
-    if (camera_read_reg(REG_PID, &pid) && camera_read_reg(REG_VER, &ver) &&
-            pid == EXPECTED_PID && ver == EXPECTED_VER) {
-        // set_camera_format_raw_rgb();
-        set_camera_format_yuv_yuyv();
-        // set_camera_format_rgb565();
-        get_photo_frame(FRAME_WIDTH, FRAME_HEIGHT);
-    } else {
-        printf("I2Cエラー: カメラが見つかりません。\n");
-    }
-
-    int i = 0;
     while (true) {
-        // if (camera_read_reg(REG_PID, &pid) && camera_read_reg(REG_VER, &ver) &&
-        //     pid == EXPECTED_PID && ver == EXPECTED_VER) {
-
-        //     get_photo_frame(FRAME_WIDTH, FRAME_HEIGHT);
-
-            // // 取得したデータの最初の10バイトなどを表示して確認
-            // printf("取得したフレームの左上10ピクセル:");
-            // for(int i=0; i<10; i++) {
-            //     printf(" %02X", frame_buffer[0][i]);
-            // }
-            // printf("\n");
-            // 取得したデータを全て表示
-            print_camera_format();
-            sleep_ms(10000); // 10秒待機
-            // printf("--- 取得したフレームデータ ---\n");
-            for(int y=0; y<FRAME_HEIGHT; y++) {
-                for(int x=0; x<FRAME_WIDTH; x++) {
-                    printf("%02X ", frame_buffer[y][x]);
-                }
-                printf("\n");
+        // 取得したデータを全て表示
+        print_camera_format();
+        sleep_ms(10000); // 10秒待機
+        // printf("--- 取得したフレームデータ ---\n");
+        for(int y=0; y<FRAME_HEIGHT; y++) {
+            for(int x=0; x<FRAME_WIDTH; x++) {
+                printf("%02X ", frame_buffer[y][x]);
             }
-            // printf("--- フレーム取得完了 --- \n\n");
-            sleep_ms(5000); // 5秒待機
-
-        // } else {
-        //     printf("I2Cエラー: カメラが見つかりません。\n");
-        // }
+            printf("\n");
+        }
+        // printf("--- フレーム取得完了 --- \n\n");
+        sleep_ms(5000); // 5秒待機
     }
 }
