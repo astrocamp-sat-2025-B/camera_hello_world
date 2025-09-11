@@ -7,10 +7,10 @@ FILE_PATH = "papercop"
 # FILE_PATH = "screenlog.0"
 
 # 生成する画像の幅と高さ (QVGAサイズを推奨)
-WIDTH = 160
-HEIGHT = 240
-# WIDTH = 320
+# WIDTH = 160
 # HEIGHT = 240
+WIDTH = 160
+HEIGHT = 480
 
 # 出力する画像ファイル名
 OUTPUT_PATH = "output_grayscale_image_line_by_line.png"

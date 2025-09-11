@@ -16,8 +16,8 @@
 #define XCLK_PIN 28
 
 // カメラ
-// #define FRAME_WIDTH  320 * 2
-#define FRAME_WIDTH  320
+#define FRAME_WIDTH (320 * 2) // QVGAサイズ (320x240) を想定
+// #define FRAME_WIDTH  320
 #define FRAME_HEIGHT 240
 #define D0_PIN 0
 #define D1_PIN 1
@@ -43,6 +43,7 @@ const uint8_t REG_PID = 0x0A;
 const uint8_t REG_VER = 0x0B;
 const uint8_t REG_COM7 = 0x12;
 const uint8_t REG_COM15 = 0x40;
+const uint8_t REG_REG444 = 0x8C;
 const uint8_t REG_TSLB = 0x3A;
 const uint8_t REG_COM13 = 0x3D;
 const uint8_t EXPECTED_PID = 0x76;
@@ -213,6 +214,28 @@ void set_camera_format_raw_rgb() {
     }
 }
 
+void set_camera_format_rgb565() {
+    uint8_t reg_val;
+
+    // --- ステップ1: COM7レジスタを設定 (RGBモード) ---
+    if (!camera_read_reg(REG_COM7, &reg_val)) { printf("エラー: COM7の読み取りに失敗。\n"); return; }
+    reg_val |= (1 << 2);  // Bit2を1にセット (RGB)
+    reg_val &= ~(1 << 0); // Bit0を0にクリア
+    if (!camera_write_reg(REG_COM7, reg_val)) { printf("エラー: COM7の書き込みに失敗。\n"); return; }
+
+    // --- ステップ2: COM15レジスタを設定 (RGB565モード) ---
+    if (!camera_read_reg(REG_COM15, &reg_val)) { printf("エラー: COM15の読み取りに失敗。\n"); return; }
+    reg_val |= (1 << 4);  // Bit4を1にセット (RGB565)
+    reg_val &= ~(1 << 5); // Bit5を0にクリア
+    if (!camera_write_reg(REG_COM15, reg_val)) { printf("エラー: COM15の書き込みに失敗。\n"); return; }
+
+    // --- ステップ3: REG444レジスタを確認/設定 (RGB444を無効化) ---
+    // RGB565を有効にするための前提条件
+    if (!camera_read_reg(REG_REG444, &reg_val)) { printf("エラー: REG444の読み取りに失敗。\n"); return; }
+    reg_val &= ~(1 << 1); // Bit1を0にクリア (RGB444無効)
+    if (!camera_write_reg(REG_REG444, reg_val)) { printf("エラー: REG444の書き込みに失敗。\n"); return; }
+}
+
 // カメラの出力形式をYUV (YUYV) に設定する関数
 void set_camera_format_yuv_yuyv() {
     uint8_t com7_val, tslb_val, com13_val;
@@ -310,6 +333,7 @@ int main()
             pid == EXPECTED_PID && ver == EXPECTED_VER) {
         // set_camera_format_raw_rgb();
         set_camera_format_yuv_yuyv();
+        // set_camera_format_rgb565();
         get_photo_frame(FRAME_WIDTH, FRAME_HEIGHT);
     } else {
         printf("I2Cエラー: カメラが見つかりません。\n");
