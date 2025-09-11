@@ -35,7 +35,10 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(camera_hello_world camera_hello_world.cpp )
+add_executable(camera_hello_world
+    camera_hello_world.cpp
+    camera.cpp
+)
 
 pico_set_program_name(camera_hello_world "camera_hello_world")
 pico_set_program_version(camera_hello_world "0.1")
